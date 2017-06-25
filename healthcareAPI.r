@@ -24,6 +24,10 @@ healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                      
                                      getURL = function(){
                                        return(private$url)
+                                     },
+                                     
+                                     nextPage(){
+                                       #TODO: implement updating page# of query
                                      }
                                    ),
                                    
@@ -41,6 +45,9 @@ zipcodeValidation <- R6Class("ZipcodeValidation",
                                  private$zip <- zipcode
                                  query <- private$updateQuery()
                                  super$initialize(query, "getCountiesForZip")
+                               },
+                               getResponseClass <- function(){
+                                 return("ZipcodeValidationResponse")
                                }
                              ),
                              
@@ -53,12 +60,15 @@ zipcodeValidation <- R6Class("ZipcodeValidation",
                              )
 )
 
-IFP_PlanFinder <- R6Class("IFPPlanFinder",
+IFP_PlanQuote <- R6Class("IFPPlanQuote",
                           inherit = healthcareFinderRequest,
                           public = list(
                             initialize = function(enrollees, zipcode, effDate){
                               query <- private$updateQuery()
                               super$initialize(query, "getIFPPlanQuotes")
+                            },
+                            getResponseClass <- function(){
+                              return("IFPPlanQuoteResponse")
                             }
                           ),
                           
@@ -75,6 +85,9 @@ IFP_PlanDetails <- R6Class("IFPPlanDetails",
                              initialize = function(enrollees, zipcode, effDate, planID){
                                query <- private$updateQuery()
                                super$initialize(query, "getIFPPlanBenefits")
+                             },
+                             getResponseClass <- function(){
+                               return("IFPPlanDetailsResponse")
                              }
                            ),
                            
@@ -85,4 +98,52 @@ IFP_PlanDetails <- R6Class("IFPPlanDetails",
                              }
                            )
 )
-healthcareFinderResponse <- R6Class("HealthcareFinderResponse")
+SMG_PlanQuote <- R6Class("SMGPlanQuote",
+                         inherit = healthcareFinderRequest,
+                         public = list(
+                           initialize = function(enrollees, zipcode, effDate){
+                             query <- private$updateQuery()
+                             super$initialize(query, "getSMGPlanQuotes")
+                           },
+                           getResponseClass <- function(){
+                             return("SMGPlanQuoteResponse")
+                           }
+                         ),
+                         
+                         private = list(
+                           updateQuery = function(){
+                             #TODO: read in xml and update plan query
+                             "query"
+                           }
+                         )
+)
+SMG_PlanDetails <- R6Class("SMGPlanDetails",
+                           inherit = healthcareFinderRequest,
+                           public = list(
+                             initialize = function(enrollees, zipcode, effDate, planID){
+                               query <- private$updateQuery()
+                               super$initialize(query, "getSMGPlanBenefits")
+                             },
+                             getResponseClass <- function(){
+                               return("SMGPlanDetailsResponse")
+                             }
+                           ),
+                           
+                           private = list(
+                             updateQuery = function(){
+                               #TODO: read in xml and update plan query
+                               "query"
+                             }
+                           )
+)
+HealthcareAPIRequest <- function(request){
+  #TODO: verify that is HealthcareFinderRequest
+  
+  #TODO: submit request and confirm successful response
+  
+  #TODO: process request appropriately (zip vs. IFP vs. SMG, etc...)
+}
+
+processAPIResponse <- function(xmlResponse){
+  #TODO: verify is xml
+}
