@@ -160,5 +160,3 @@ HealthcareAPIRequest <- function(request){
 processAPIResponse <- function(xmlResponse){
   #TODO: verify is xml
 }
-
-zipcodeValidation$new(3333333)
