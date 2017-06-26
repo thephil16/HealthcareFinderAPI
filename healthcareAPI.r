@@ -26,7 +26,7 @@ healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                        return(private$url)
                                      },
                                      
-                                     nextPage(){
+                                     nextPage = function(){
                                        #TODO: implement updating page# of query
                                      }
                                    ),
@@ -42,22 +42,22 @@ zipcodeValidation <- R6Class("ZipcodeValidation",
                              inherit = healthcareFinderRequest,
                              public = list(
                                initialize = function(zipcode){
-                                 setZip(zipcode)
-                                 query <- private$updateQuery(zipcode)
+                                 self$setZip(zipcode)
+                                 query <- private$updateQuery(private$zip)
                                  super$initialize(query, "getCountiesForZip")
                                },
-                               getResponseClass <- function(){
+                               getResponseClass = function(){
                                  return("ZipcodeValidationResponse")
                                },
-                               setZip <- function(zipcode){
+                               setZip = function(zipcode){
                                  zip <- as.character(zipcode)
-                                 if(!grepl("^[[:digit:]]{5}$")){
+                                 if(!grepl("^[[:digit:]]{5}$", zip)){
                                    stop("Only a 5 digit zipcode can be used!")
                                  } else {
                                    private$zip <- zip
                                  }
                                },
-                               getZip <- function(){
+                               getZip = function(){
                                  return(private$zip)
                                }
                              ),
@@ -65,9 +65,10 @@ zipcodeValidation <- R6Class("ZipcodeValidation",
                              private = list(
                                zip = "",
                                updateQuery = function(zipcode){
-                                 xml <- read_xml("./ZipRequest_Template.xml")
+                                 xml <- read_xml("./XML_Templates/ZipRequest_Template.xml")
                                  zipNode <- xml_find_first(xml, "//p:ZipCode")
                                  xml_text(zipNode) <- zipcode
+                                 return(xml)
                                }
                              )
 )
@@ -79,7 +80,7 @@ IFP_PlanQuote <- R6Class("IFPPlanQuote",
                               query <- private$updateQuery()
                               super$initialize(query, "getIFPPlanQuotes")
                             },
-                            getResponseClass <- function(){
+                            getResponseClass = function(){
                               return("IFPPlanQuoteResponse")
                             }
                           ),
@@ -98,7 +99,7 @@ IFP_PlanDetails <- R6Class("IFPPlanDetails",
                                query <- private$updateQuery()
                                super$initialize(query, "getIFPPlanBenefits")
                              },
-                             getResponseClass <- function(){
+                             getResponseClass = function(){
                                return("IFPPlanDetailsResponse")
                              }
                            ),
@@ -117,7 +118,7 @@ SMG_PlanQuote <- R6Class("SMGPlanQuote",
                              query <- private$updateQuery()
                              super$initialize(query, "getSMGPlanQuotes")
                            },
-                           getResponseClass <- function(){
+                           getResponseClass = function(){
                              return("SMGPlanQuoteResponse")
                            }
                          ),
@@ -136,7 +137,7 @@ SMG_PlanDetails <- R6Class("SMGPlanDetails",
                                query <- private$updateQuery()
                                super$initialize(query, "getSMGPlanBenefits")
                              },
-                             getResponseClass <- function(){
+                             getResponseClass = function(){
                                return("SMGPlanDetailsResponse")
                              }
                            ),
@@ -159,3 +160,5 @@ HealthcareAPIRequest <- function(request){
 processAPIResponse <- function(xmlResponse){
   #TODO: verify is xml
 }
+
+zipcodeValidation$new(3333333)
