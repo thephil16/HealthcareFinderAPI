@@ -42,20 +42,32 @@ zipcodeValidation <- R6Class("ZipcodeValidation",
                              inherit = healthcareFinderRequest,
                              public = list(
                                initialize = function(zipcode){
-                                 private$zip <- zipcode
-                                 query <- private$updateQuery()
+                                 setZip(zipcode)
+                                 query <- private$updateQuery(zipcode)
                                  super$initialize(query, "getCountiesForZip")
                                },
                                getResponseClass <- function(){
                                  return("ZipcodeValidationResponse")
+                               },
+                               setZip <- function(zipcode){
+                                 zip <- as.character(zipcode)
+                                 if(!grepl("^[[:digit:]]{5}$")){
+                                   stop("Only a 5 digit zipcode can be used!")
+                                 } else {
+                                   private$zip <- zip
+                                 }
+                               },
+                               getZip <- function(){
+                                 return(private$zip)
                                }
                              ),
                              
                              private = list(
                                zip = "",
-                               updateQuery = function(){
-                                 #TODO: read in xml and update zipcode query
-                                 "query"
+                               updateQuery = function(zipcode){
+                                 xml <- read_xml("./ZipRequest_Template.xml")
+                                 zipNode <- xml_find_first(xml, "//p:ZipCode")
+                                 xml_text(zipNode) <- zipcode
                                }
                              )
 )
