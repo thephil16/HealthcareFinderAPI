@@ -1,6 +1,7 @@
 require(R6)
 require(httr)
 require(xml2)
+require(data.table)
 
 healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                    public = list(
@@ -161,7 +162,8 @@ HealthcareAPIRequest <- function(request){
   
   response <- POST(url = requestURL,
                    config = list(requestHeader),
-                   body = requestBody)
+                   body = requestBody,
+                   content_type_xml())
   
   status <- status_code(response)
   if(status != 200){
@@ -169,13 +171,13 @@ HealthcareAPIRequest <- function(request){
   }
   
   #TODO: process request appropriately (zip vs. IFP vs. SMG, etc...) along with getting additional pages
-  class(response) <- append(class(response), request$getResponseClass)
+  class(response) <- append(class(response), request$getResponseClass())
   processAPIResponse(response)
 }
 
 processAPIResponse <- function(xmlResponse){
   #TODO: verify is xml
-  UseMethod(processAPIResponse, xmlResponse)
+  UseMethod("processAPIResponse", xmlResponse)
 }
 
 processAPIResponse.default <- function(xmlResponse){
@@ -183,5 +185,23 @@ processAPIResponse.default <- function(xmlResponse){
 }
 
 processAPIResponse.ZipcodeValidationResponse <- function(xmlResponse){
+  xmlContent <- read_xml(xmlResponse)
   
+  countyList <- xml_find_all(xmlContent, "//ns2:County")
+  finalDT <- NULL
+  
+  for(i in countyList){
+    childNodes <- xml_children(i)
+    varNames <- xml_name(childNodes)
+    varValues <- xml_text(childNodes)
+    names(varValues) <- varNames
+    tempDT <- setDT(as.list(varValues))
+    if(is.null(finalDT)){
+      finalDT <- tempDT
+    } else {
+      finalDT <- funion(finalDT, tempDT, all = TRUE)
+    }
+  }
+  
+  return(finalDT)
 }
