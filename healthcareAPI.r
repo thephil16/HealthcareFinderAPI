@@ -10,12 +10,12 @@ healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                        private$url <- paste("https://api.finder.healthcare.gov", "v3.0", urlSuffix, sep = "/")
                                        private$header <- add_headers(Host = "api.finder.healthcare.gov",
                                                                      Connection = "close",
-                                                                     'Content-Length' = nchar(private$requestXML)
+                                                                     'Content-Length' = nchar(unserialize(xml_serialize(private$requestXML, connection = NULL))[1])
                                        )
                                      },
                                      
                                      getQueryXML = function(){
-                                       return(private$requestXML)
+                                       unserialize(xml_serialize(private$requestXML, connection = NULL))[1]
                                      },
                                      
                                      getHeader = function(){
@@ -150,13 +150,38 @@ SMG_PlanDetails <- R6Class("SMGPlanDetails",
                            )
 )
 HealthcareAPIRequest <- function(request){
-  #TODO: verify that is HealthcareFinderRequest
+  #TODO: verify more robustly
+  if(!any(class(request) == "HealthcareFinderRequest")){
+    stop("Must use a HealthcareFinderRequest object for this function!")
+  }
   
-  #TODO: submit request and confirm successful response
+  requestURL <- request$getURL()
+  requestHeader <- request$getHeader()
+  requestBody <- request$getQueryXML()
   
-  #TODO: process request appropriately (zip vs. IFP vs. SMG, etc...)
+  response <- POST(url = requestURL,
+                   config = list(requestHeader),
+                   body = requestBody)
+  
+  status <- status_code(response)
+  if(status != 200){
+    stop(sprintf("Query failed with status %s!", status))
+  }
+  
+  #TODO: process request appropriately (zip vs. IFP vs. SMG, etc...) along with getting additional pages
+  class(response) <- append(class(response), request$getResponseClass)
+  processAPIResponse(response)
 }
 
 processAPIResponse <- function(xmlResponse){
   #TODO: verify is xml
+  UseMethod(processAPIResponse, xmlResponse)
+}
+
+processAPIResponse.default <- function(xmlResponse){
+  stop("Unknown type!")
+}
+
+processAPIResponse.ZipcodeValidationResponse <- function(xmlResponse){
+  
 }
