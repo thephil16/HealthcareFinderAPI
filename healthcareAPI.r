@@ -2,6 +2,7 @@ require(R6)
 require(httr)
 require(xml2)
 require(data.table)
+require(lubridate)
 
 healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                    public = list(
@@ -29,6 +30,12 @@ healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                      
                                      nextPage = function(){
                                        #TODO: implement updating page# of query
+                                       pageNode <- xml_find_first(private$requestXML, "//p:PaginationInformation/PageNumber")
+                                       
+                                       curPage <- xml_integer(pageNode)
+                                       nextPage <- curPage + 1
+                                       
+                                       xml_integer(pageNode) <- nextPage
                                      }
                                    ),
                                    
@@ -77,26 +84,43 @@ zipcodeValidation <- R6Class("ZipcodeValidation",
 IFP_PlanQuote <- R6Class("IFPPlanQuote",
                           inherit = healthcareFinderRequest,
                           public = list(
-                            initialize = function(enrollees, zipcode, effDate){
+                            initialize = function(enrollees, zipcode, county, effDate){
                               query <- private$updateQuery()
                               super$initialize(query, "getIFPPlanQuotes")
                             },
+                            
                             getResponseClass = function(){
                               return("IFPPlanQuoteResponse")
+                            },
+                            
+                            setEnrollees = function(enrollees){
+                              is.list(enrollees)
+                            },
+                            
+                            setLocation = function(zip, county){
+                              
+                            },
+                            
+                            setEffDate= function(effDate){
+                              
                             }
                           ),
                           
                           private = list(
+                            enrollees = list(),
+                            zip = "",
+                            county = "",
+                            effDate = "",
+                            
                             updateQuery = function(){
                               #TODO: read in xml and update plan query
-                              "query"
                             }
                           )
 )
 IFP_PlanDetails <- R6Class("IFPPlanDetails",
                            inherit = healthcareFinderRequest,
                            public = list(
-                             initialize = function(enrollees, zipcode, effDate, planID){
+                             initialize = function(enrollees, zipcode, county, effDate, planID){
                                query <- private$updateQuery()
                                super$initialize(query, "getIFPPlanBenefits")
                              },
@@ -115,7 +139,7 @@ IFP_PlanDetails <- R6Class("IFPPlanDetails",
 SMG_PlanQuote <- R6Class("SMGPlanQuote",
                          inherit = healthcareFinderRequest,
                          public = list(
-                           initialize = function(enrollees, zipcode, effDate){
+                           initialize = function(enrollees, zipcode, county, effDate){
                              query <- private$updateQuery()
                              super$initialize(query, "getSMGPlanQuotes")
                            },
@@ -134,7 +158,7 @@ SMG_PlanQuote <- R6Class("SMGPlanQuote",
 SMG_PlanDetails <- R6Class("SMGPlanDetails",
                            inherit = healthcareFinderRequest,
                            public = list(
-                             initialize = function(enrollees, zipcode, effDate, planID){
+                             initialize = function(enrollees, zipcode, county, effDate, planID){
                                query <- private$updateQuery()
                                super$initialize(query, "getSMGPlanBenefits")
                              },
@@ -149,6 +173,76 @@ SMG_PlanDetails <- R6Class("SMGPlanDetails",
                                "query"
                              }
                            )
+)
+enrollee <- R6Class("Enrollee",
+                    public = list(
+                      initialize = function(birthDate, gender, tobaccoLastUsed, relation, householdIndicator){
+                        private$setDOB(birthDate)
+                        private$setGender(gender)
+                        private$setTobaccoUse(tobaccoLastUsed)
+                        private$setRelation(relation)
+                        private$setHouseholdIndicator(householdIndicator)
+                      },
+                      
+                      getDOB = function(){
+                        private$DOB
+                      },
+                      getGender = function(){
+                        private$gender
+                      },
+                      getTobaccoUse = function(){
+                        private$tobaccoUse
+                      },
+                      getRelation = function(){
+                        private$relation
+                      },
+                      getHouseholdIndicator = function(){
+                        private$householdIndicator
+                      }
+                    ),
+                    private = list(
+                      DOB = "",
+                      gender = "",
+                      tobaccoUse = "",
+                      relation = "",
+                      householdIndicator = "",
+                      
+                      setDOB = function(birthDate){
+                        if(!is.POSIXct(birthDate)){
+                          stop("Improper date format")
+                        }
+                        private$DOB <- birthDate
+                      },
+                      setGender = function(gender){
+                        # needs to be either 'Male' or 'Female'
+                        if(!grepl("?i[mf]$|(?:(?:fe)?male)", gender)){
+                          stop("Improper gender format")
+                        }
+                        output <- toupper(strtrim(gender, 1))
+                        private$gender <- output
+                      },
+                      setTobaccoUse = function(tobaccoLastUsed){
+                        if(is.null(tobaccoLastUsed)){
+                          return()
+                        } else if(is.integer()) {
+                          output <- min(tobaccoLastUsed, 6)
+                          private$tobaccoUse <- output
+                          return()
+                        } else {
+                          stop("Incorrect input for tobacco use!")
+                        }
+                      },
+                      setRelation = function(relationship){
+                        
+                      },
+                      setHouseholdRelation = function(householdStatus){
+                        if(!is.logical(householdStatus)){
+                          stop("Household relation must be a logical value!")
+                        } else {
+                          private$householdIndicator <- householdStatus
+                        }
+                      }
+                    )
 )
 HealthcareAPIRequest <- function(request){
   #TODO: verify more robustly
@@ -172,7 +266,7 @@ HealthcareAPIRequest <- function(request){
   
   #TODO: process request appropriately (zip vs. IFP vs. SMG, etc...) along with getting additional pages
   class(response) <- append(class(response), request$getResponseClass())
-  processAPIResponse(response)
+  return(response)
 }
 
 processAPIResponse <- function(xmlResponse){
