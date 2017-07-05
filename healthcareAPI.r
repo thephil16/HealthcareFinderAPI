@@ -162,6 +162,9 @@ IFP_PlanQuote <- R6Class("IFPPlanQuote",
                           inherit = healthcareFinderRequest,
                           public = list(
                             initialize = function(enrollees, zipcode, county, effDate){
+                              private$setEnrollees(enrollees)
+                              private$setLocation(zipcode, county)
+                              private$setEffDate(effDate)
                               query <- private$updateQuery()
                               super$initialize(query, "getIFPPlanQuotes")
                             },
