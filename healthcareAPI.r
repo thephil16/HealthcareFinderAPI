@@ -15,7 +15,7 @@ enrollee <- R6Class("Enrollee",
                       },
                       
                       getDOB = function(){
-                        private$DOB
+                        format(private$DOB, format = "%F")
                       },
                       getGender = function(){
                         private$gender
@@ -38,10 +38,11 @@ enrollee <- R6Class("Enrollee",
                       householdIndicator = "",
                       
                       setDOB = function(birthDate){
-                        if(!is.POSIXct(birthDate)){
+                        bday <- as.POSIXct(birthDate)
+                        if(is.na(bday)){
                           stop("Improperly formatted input for birth date!")
                         }
-                        private$DOB <- birthDate
+                        private$DOB <- bday
                       },
                       setGender = function(gender){
                         # needs to be either 'Male' or 'Female'
@@ -58,12 +59,15 @@ enrollee <- R6Class("Enrollee",
                       setTobaccoUse = function(tobaccoLastUsed){
                         if(is.null(tobaccoLastUsed)){
                           private$tobaccoUse <- NULL
-                        } else if(is.integer()) {
-                          output <- min(tobaccoLastUsed, 6)
-                          private$tobaccoUse <- output
-                        } else {
+                          return()
+                        }
+                        
+                        lastUsed <- as.integer(tobaccoLastUsed)
+                        if(is.na(lastUsed) || lastUsed < 1){
                           stop("Improperly formatted input for tobacco use!\n
                                Months since last used tobacco should be between 1 and 6.")
+                        } else {
+                          private$tobaccoUse <- min(lastUsed, 6)
                         }
                       },
                       setRelation = function(relationship){
@@ -93,7 +97,7 @@ healthcareFinderRequest <- R6Class("HealthcareFinderRequest",
                                        private$url <- paste("https://api.finder.healthcare.gov", "v3.0", urlSuffix, sep = "/")
                                        private$header <- add_headers(Host = "api.finder.healthcare.gov",
                                                                      Connection = "close",
-                                                                     'Content-Length' = nchar(unserialize(xml_serialize(private$requestXML, connection = NULL))[1])
+                                                                     'Content-Length' = nchar(as.character(private$requestXML))
                                        )
                                      },
                                      getQueryXML = function(){
@@ -178,7 +182,7 @@ IFP_PlanQuote <- R6Class("IFPPlanQuote",
                               return()
                             },
                             getEffDate = function(){
-                              private$effDate
+                              format(private$effDate, format = "%F")
                             }
                           ),
                           
@@ -234,13 +238,99 @@ IFP_PlanQuote <- R6Class("IFPPlanQuote",
                               private$state <- results[,StateCode]
                             },
                             setEffDate= function(effDate){
-                              if (!is.POSIXct(effDate)) {
+                              date <- as.POSIXct(effDate)
+                              if (is.na(date)) {
                                 stop("Improperly formatted input for effective date!")
                               }
-                              private$effDate <- effDate
+                              private$effDate <- date
                             },
                             updateQuery = function(){
                               #TODO: read in xml and update plan query
+                              xml <- read_xml("./XML_Templates/PlanQuoteRequest_Template.xml")
+                              requestNode <- xml_find_first(xml, "/p:PlanQuoteRequest")
+                              
+                              # update enrollees
+                              for(enr in private$enrollees){
+                                ## add enrollee
+                                xml_add_child(requestNode, "p:Enrollees", .where = 0)
+                                curNode <- xml_find_first(requestNode, "p:Enrollees")
+                                
+                                ## update DOB
+                                xml_add_child(curNode, "p1:DateOfBirth")
+                                xml_set_text(xml_find_first(curNode, "p1:DateOfBirth"), enr$getDOB())
+                                
+                                ## update Gender
+                                xml_add_child(curNode, "p1:Gender")
+                                xml_set_text(xml_find_first(curNode, "p1:Gender"), enr$getGender())
+                                
+                                ## update TobaccoUse
+                                if(!is.null(enr$getTobaccoUse())){
+                                  xml_add_child(curNode, "p1:TobaccoLastUsedMonths")
+                                  xml_set_text(xml_find_first(curNode, "p1:TobaccoLastUsedMonths"), as.character(enr$getTobaccoUse()))
+                                }
+                                
+                                ## Update Relation
+                                xml_add_child(curNode, "p1:Relation")
+                                xml_set_text(xml_find_first(curNode, "p1:Relation"), enr$getRelation())
+                                
+                                ## Update In-House Status
+                                xml_add_child(curNode, "p1:InHouseholdIndicator")
+                                xml_set_text(xml_find_first(curNode, "p1:InHouseholdIndicator"), tolower(as.character(enr$getHouseholdIndicator())))
+                              }
+                              
+                              # update location
+                              xml_add_child(requestNode, "p:Location")
+                              curNode <- xml_find_first(requestNode, "p:Location")
+                              ## update zipcode
+                              xml_add_child(curNode, "p1:ZipCode")
+                              xml_set_text(xml_find_first(curNode, "p1:ZipCode"), as.character(private$zip))
+                              ## update county
+                              xml_add_child(curNode, "p1:County")
+                              curNode <- xml_find_first(curNode, "p1:County")
+                              
+                              xml_add_child(curNode, "p1:FipsCode")
+                              xml_set_text(xml_find_first(curNode, "p1:FipsCode"), private$fipsCode)
+                              
+                              
+                              xml_add_child(curNode, "p1:CountyName")
+                              xml_set_text(xml_find_first(curNode, "p1:CountyName"), private$county)
+                              
+                              xml_add_child(curNode, "p1:StateCode")
+                              xml_set_text(xml_find_first(curNode, "p1:StateCode"), private$state)
+                              
+                              # update effdate
+                              xml_add_child(requestNode, "p:InsuranceEffectiveDate")
+                              xml_set_text(xml_find_first(requestNode, "p:InsuranceEffectiveDate"), self$getEffDate())
+                              
+                              # update Market
+                              xml_add_child(requestNode, "p:Market")
+                              xml_set_text(xml_find_first(requestNode, "p:Market"), "Individual")
+                              
+                              # update filters
+                              xml_add_child(requestNode, "p:IsFilterAnalysisRequiredIndicator")
+                              xml_set_text(xml_find_first(requestNode, "p:IsFilterAnalysisRequiredIndicator"), "false")
+                              
+                              # update pagination info
+                              xml_add_child(requestNode, "p:PaginationInformation")
+                              curNode <- xml_find_first(requestNode, "p:PaginationInformation")
+                              ## update pagenumber
+                              xml_add_child(curNode, "p1:PageNumber")
+                              xml_set_text(xml_find_first(curNode, "p1:PageNumber"), as.character(1))
+                              ## update pagesize
+                              xml_add_child(curNode, "p1:PageSize")
+                              xml_set_text(xml_find_first(curNode, "p1:PageSize"), as.character(500))
+                              
+                              # Update sort order
+                              xml_add_child(requestNode, "p:SortOrder")
+                              curNode <- xml_find_first(requestNode, "p:SortOrder")
+                              ## update sort field
+                              xml_add_child(curNode, "p1:SortField")
+                              xml_set_text(xml_find_first(curNode, "p1:SortField"), "BASE RATE")
+                              ## update sort direction
+                              xml_add_child(curNode, "p1:SortDirection")
+                              xml_set_text(xml_find_first(curNode, "p1:SortDirection"), "ASC")
+                              
+                              return(xml)
                             }
                           )
 )
@@ -344,6 +434,28 @@ processAPIResponse.ZipcodeValidationResponse <- function(xmlResponse){
   finalDT <- NULL
   
   for(i in countyList){
+    childNodes <- xml_children(i)
+    varNames <- xml_name(childNodes)
+    varValues <- xml_text(childNodes)
+    names(varValues) <- varNames
+    tempDT <- setDT(as.list(varValues))
+    if(is.null(finalDT)){
+      finalDT <- tempDT
+    } else {
+      finalDT <- funion(finalDT, tempDT, all = TRUE)
+    }
+  }
+  
+  return(finalDT)
+}
+
+processAPIResponse.IFPPlanQuoteResponse <- function(xmlResponse){
+  xmlContent <- read_xml(xmlResponse)
+  
+  planList <- xml_find_all(xmlContent, "//ns2:Plan")
+  finalDT <- NULL
+  
+  for(i in planList){
     childNodes <- xml_children(i)
     varNames <- xml_name(childNodes)
     varValues <- xml_text(childNodes)
