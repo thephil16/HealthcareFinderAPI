@@ -335,65 +335,218 @@ IFP_PlanQuote <- R6Class("IFPPlanQuote",
                           )
 )
 
-IFP_PlanDetails <- R6Class("IFPPlanDetails",
-                           inherit = healthcareFinderRequest,
-                           public = list(
-                             initialize = function(enrollees, zipcode, county, effDate, planID){
-                               query <- private$updateQuery()
-                               super$initialize(query, "getIFPPlanBenefits")
-                             },
-                             getResponseClass = function(){
-                               return("IFPPlanDetailsResponse")
-                             }
-                           ),
-                           
-                           private = list(
-                             updateQuery = function(){
-                               #TODO: read in xml and update plan query
-                               "query"
-                             }
-                           )
-)
+# IFP_PlanDetails <- R6Class("IFPPlanDetails",
+#                            inherit = healthcareFinderRequest,
+#                            public = list(
+#                              initialize = function(enrollees, zipcode, county, effDate, planID){
+#                                query <- private$updateQuery()
+#                                super$initialize(query, "getIFPPlanBenefits")
+#                              },
+#                              getResponseClass = function(){
+#                                return("IFPPlanDetailsResponse")
+#                              }
+#                            ),
+#                            
+#                            private = list(
+#                              updateQuery = function(){
+#                                #TODO: read in xml and update plan query
+#                                "query"
+#                              }
+#                            )
+# )
 
 SMG_PlanQuote <- R6Class("SMGPlanQuote",
                          inherit = healthcareFinderRequest,
                          public = list(
                            initialize = function(enrollees, zipcode, county, effDate){
+                             private$setEnrollees(enrollees)
+                             private$setLocation(zipcode, county)
+                             private$setEffDate(effDate)
                              query <- private$updateQuery()
                              super$initialize(query, "getSMGPlanQuotes")
                            },
                            getResponseClass = function(){
                              return("SMGPlanQuoteResponse")
+                           },
+                           getEnrollees = function(){
+                             private$enrollees
+                           },
+                           getLocation = function(){
+                             return()
+                           },
+                           getEffDate = function(){
+                             format(private$effDate, format = "%F")
                            }
                          ),
                          
                          private = list(
+                           enrollees = list(),
+                           zip = "",
+                           fipsCode = "",
+                           county = "",
+                           state = "",
+                           effDate = "",
+                           setEnrollees = function(enrollees){
+                             if(!is.list(enrollees)){
+                               stop("Enrollees must be a list of 'Enrollee' objects!")
+                             }
+                             
+                             selfCount <- 0
+                             spouseCount <- 0
+                             dependentCount <- 0
+                             for(i in enrollees){
+                               if(!any(class(i) == "Enrollee")){
+                                 stop("All enrollees must be in 'Enrollee' class!")
+                               }
+                               if(i$getRelation() == "SELF"){
+                                 selfCount <- selfCount + 1
+                               } else if(i$getRelation() == "SPOUSE" | i$getRelation() == "LIFE_PARTNER"){
+                                 spouseCount <- spouseCount + 1
+                               } else {
+                                 dependentCount <- dependentCount + 1
+                               }
+                             }
+                             
+                             if(selfCount != 1 | spouseCount > 1 | dependentCount > 5){
+                               stop("Bad enrollee combination!")
+                             }
+                             
+                             private$enrollees <- enrollees
+                           },
+                           setLocation = function(zip, county){
+                             county <- toupper(county)
+                             
+                             tempZipRequest <- zipcodeValidation$new(zip)
+                             response <- HealthcareAPIRequest(tempZipRequest)
+                             results <- processAPIResponse(response)
+                             
+                             results <- results[CountyName == county]
+                             if(results[,.N] != 1){
+                               stop("No matching locations!")
+                             }
+                             
+                             private$fipsCode <- results[,FipsCode]
+                             private$zip <- zip
+                             private$county <- results[,CountyName]
+                             private$state <- results[,StateCode]
+                           },
+                           setEffDate= function(effDate){
+                             date <- as.POSIXct(effDate)
+                             if (is.na(date)) {
+                               stop("Improperly formatted input for effective date!")
+                             }
+                             private$effDate <- date
+                           },
                            updateQuery = function(){
                              #TODO: read in xml and update plan query
-                             "query"
+                             xml <- read_xml("./XML_Templates/PlanQuoteRequest_Template.xml")
+                             requestNode <- xml_find_first(xml, "/p:PlanQuoteRequest")
+                             
+                             # update enrollees
+                             for(enr in private$enrollees){
+                               ## add enrollee
+                               xml_add_child(requestNode, "p:Enrollees", .where = 0)
+                               curNode <- xml_find_first(requestNode, "p:Enrollees")
+                               
+                               ## update DOB
+                               xml_add_child(curNode, "p1:DateOfBirth")
+                               xml_set_text(xml_find_first(curNode, "p1:DateOfBirth"), enr$getDOB())
+                               
+                               ## update Gender
+                               xml_add_child(curNode, "p1:Gender")
+                               xml_set_text(xml_find_first(curNode, "p1:Gender"), enr$getGender())
+                               
+                               ## update TobaccoUse
+                               if(!is.null(enr$getTobaccoUse())){
+                                 xml_add_child(curNode, "p1:TobaccoLastUsedMonths")
+                                 xml_set_text(xml_find_first(curNode, "p1:TobaccoLastUsedMonths"), as.character(enr$getTobaccoUse()))
+                               }
+                               
+                               ## Update Relation
+                               xml_add_child(curNode, "p1:Relation")
+                               xml_set_text(xml_find_first(curNode, "p1:Relation"), enr$getRelation())
+                               
+                               ## Update In-House Status
+                               xml_add_child(curNode, "p1:InHouseholdIndicator")
+                               xml_set_text(xml_find_first(curNode, "p1:InHouseholdIndicator"), tolower(as.character(enr$getHouseholdIndicator())))
+                             }
+                             
+                             # update location
+                             xml_add_child(requestNode, "p:Location")
+                             curNode <- xml_find_first(requestNode, "p:Location")
+                             ## update zipcode
+                             xml_add_child(curNode, "p1:ZipCode")
+                             xml_set_text(xml_find_first(curNode, "p1:ZipCode"), as.character(private$zip))
+                             ## update county
+                             xml_add_child(curNode, "p1:County")
+                             curNode <- xml_find_first(curNode, "p1:County")
+                             
+                             xml_add_child(curNode, "p1:FipsCode")
+                             xml_set_text(xml_find_first(curNode, "p1:FipsCode"), private$fipsCode)
+                             
+                             
+                             xml_add_child(curNode, "p1:CountyName")
+                             xml_set_text(xml_find_first(curNode, "p1:CountyName"), private$county)
+                             
+                             xml_add_child(curNode, "p1:StateCode")
+                             xml_set_text(xml_find_first(curNode, "p1:StateCode"), private$state)
+                             
+                             # update effdate
+                             xml_add_child(requestNode, "p:InsuranceEffectiveDate")
+                             xml_set_text(xml_find_first(requestNode, "p:InsuranceEffectiveDate"), self$getEffDate())
+                             
+                             # update Market
+                             xml_add_child(requestNode, "p:Market")
+                             xml_set_text(xml_find_first(requestNode, "p:Market"), "SmallGroup")
+                             
+                             # update filters
+                             xml_add_child(requestNode, "p:IsFilterAnalysisRequiredIndicator")
+                             xml_set_text(xml_find_first(requestNode, "p:IsFilterAnalysisRequiredIndicator"), "false")
+                             
+                             # update pagination info
+                             xml_add_child(requestNode, "p:PaginationInformation")
+                             curNode <- xml_find_first(requestNode, "p:PaginationInformation")
+                             ## update pagenumber
+                             xml_add_child(curNode, "p1:PageNumber")
+                             xml_set_text(xml_find_first(curNode, "p1:PageNumber"), as.character(1))
+                             ## update pagesize
+                             xml_add_child(curNode, "p1:PageSize")
+                             xml_set_text(xml_find_first(curNode, "p1:PageSize"), as.character(500))
+                             
+                             # Update sort order
+                             xml_add_child(requestNode, "p:SortOrder")
+                             curNode <- xml_find_first(requestNode, "p:SortOrder")
+                             ## update sort field
+                             xml_add_child(curNode, "p1:SortField")
+                             xml_set_text(xml_find_first(curNode, "p1:SortField"), "BASE RATE")
+                             ## update sort direction
+                             xml_add_child(curNode, "p1:SortDirection")
+                             xml_set_text(xml_find_first(curNode, "p1:SortDirection"), "ASC")
+                             
+                             return(xml)
                            }
                          )
 )
 
-SMG_PlanDetails <- R6Class("SMGPlanDetails",
-                           inherit = healthcareFinderRequest,
-                           public = list(
-                             initialize = function(enrollees, zipcode, county, effDate, planID){
-                               query <- private$updateQuery()
-                               super$initialize(query, "getSMGPlanBenefits")
-                             },
-                             getResponseClass = function(){
-                               return("SMGPlanDetailsResponse")
-                             }
-                           ),
-                           
-                           private = list(
-                             updateQuery = function(){
-                               #TODO: read in xml and update plan query
-                               "query"
-                             }
-                           )
-)
+# SMG_PlanDetails <- R6Class("SMGPlanDetails",
+#                            inherit = healthcareFinderRequest,
+#                            public = list(
+#                              initialize = function(enrollees, zipcode, county, effDate, planID){
+#                                query <- private$updateQuery()
+#                                super$initialize(query, "getSMGPlanBenefits")
+#                              },
+#                              getResponseClass = function(){
+#                                return("SMGPlanDetailsResponse")
+#                              }
+#                            ),
+#                            
+#                            private = list(
+#                              updateQuery = function(){
+#                                #TODO: read in xml and update plan query
+#                                "query"
+#                              }
+#                            )
+# )
 
 HealthcareAPIRequest <- function(request){
   if(!any(class(request) == "HealthcareFinderRequest")){
@@ -469,4 +622,80 @@ processAPIResponse.IFPPlanQuoteResponse <- function(xmlResponse){
   }
   
   return(finalDT)
+}
+
+processAPIResponse.SMGPlanQuoteResponse <- function(xmlResponse){
+  xmlContent <- read_xml(xmlResponse)
+  
+  planList <- xml_find_all(xmlContent, "//ns2:Plan")
+  finalDT <- NULL
+  
+  for(i in planList){
+    childNodes <- xml_children(i)
+    varNames <- xml_name(childNodes)
+    varValues <- xml_text(childNodes)
+    names(varValues) <- varNames
+    tempDT <- setDT(as.list(varValues))
+    if(is.null(finalDT)){
+      finalDT <- tempDT
+    } else {
+      finalDT <- funion(finalDT, tempDT, all = TRUE)
+    }
+  }
+  
+  return(finalDT)
+}
+
+# Male, 30 years old, non-smoker
+defaultIFPRequest <- function(effDate, zip, county){
+  # Input validation
+  formattedDate <- as.POSIXct(effDate)
+  if(is.na(formattedDate)){
+    stop("Please provide correctly formatted date!")
+  }
+  
+  zipCode <- as.character(zip)
+  validZip <- grepl("^[[:digit:]]{5}", zipCode)
+  if(!validZip){
+    stop("Please provide correctly formatted zip code!")
+  }
+  
+  countyName <- toupper(county)
+  validCounty <- grepl("[-[:alpha:] ,'.]+", countyName)
+  if(!validCounty){
+    stop("Please provide a correctly formatted county!")
+  }
+  
+  # Generate default enrollee
+  defaultDOB <- formattedDate - (30 * years())
+  defaultMbr <- enrollee$new(defaultDOB, "Male", NULL, "SELF", TRUE)
+  mbrList <- list(defaultMbr)
+  defaultRequest <- IFP_PlanQuote$new(mbrList, zipCode, countyName, formattedDate)
+}
+
+# Male, 30 years old, non-smoker
+defaultSMGRequest <- function(effDate, zip, county){
+  # Input validation
+  formattedDate <- as.POSIXct(effDate)
+  if(is.na(formattedDate)){
+    stop("Please provide correctly formatted date!")
+  }
+  
+  zipCode <- as.character(zip)
+  validZip <- grepl("^[[:digit:]]{5}", zipCode)
+  if(!validZip){
+    stop("Please provide correctly formatted zip code!")
+  }
+  
+  countyName <- toupper(county)
+  validCounty <- grepl("[-[:alpha:] ,'.]+", countyName)
+  if(!validCounty){
+    stop("Please provide a correctly formatted county!")
+  }
+  
+  # Generate default enrollee
+  defaultDOB <- formattedDate - (30 * years())
+  defaultMbr <- enrollee$new(defaultDOB, "Male", NULL, "SELF", TRUE)
+  mbrList <- list(defaultMbr)
+  defaultRequest <- SMG_PlanQuote$new(mbrList, zipCode, countyName, formattedDate)
 }
