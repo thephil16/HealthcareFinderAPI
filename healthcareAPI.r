@@ -226,12 +226,17 @@ IFP_PlanQuote <- R6Class("IFPPlanQuote",
                               tempZipRequest <- zipcodeValidation$new(zip)
                               response <- HealthcareAPIRequest(tempZipRequest)
                               results <- processAPIResponse(response)
+                              resultsCount <- results[,.N]
                               
-                              results <- results[CountyName == county]
-                              if(results[,.N] != 1){
-                                stop("No matching locations!")
+                              if(resultsCount == 0){
+                                stop("Invalid zip code!")
+                              } else if (resultsCount > 1){
+                                results <- results[CountyName == county]
+                                if(results[,.N] != 1){
+                                  stop("No matching locations!")
+                                }
                               }
-                              
+
                               private$fipsCode <- results[,FipsCode]
                               private$zip <- zip
                               private$county <- results[,CountyName]
@@ -419,10 +424,15 @@ SMG_PlanQuote <- R6Class("SMGPlanQuote",
                              tempZipRequest <- zipcodeValidation$new(zip)
                              response <- HealthcareAPIRequest(tempZipRequest)
                              results <- processAPIResponse(response)
+                             resultsCount <- results[,.N]
                              
-                             results <- results[CountyName == county]
-                             if(results[,.N] != 1){
-                               stop("No matching locations!")
+                             if(resultsCount == 0){
+                               stop("Invalid zip code!")
+                             } else if (resultsCount > 1){
+                               results <- results[CountyName == county]
+                               if(results[,.N] != 1){
+                                 stop("No matching locations!")
+                               }
                              }
                              
                              private$fipsCode <- results[,FipsCode]
