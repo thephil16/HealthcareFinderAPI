@@ -1,0 +1,6 @@
+defaultDOB <- ymd(20170801) - (30 * years())
+defaultMbr <- enrollee$new(defaultDOB, "Male", NULL, "SELF", TRUE)
+mbrList <- list(defaultMbr)
+detailRequest <- IFP_PlanDetails$new(mbrList, "32003", "CLAY", ymd(20170801), "16842FL0120044")
+detailResponse <- HealthcareAPIRequest(detailRequest)
+detailResults <- processAPIResponse(detailResponse)
