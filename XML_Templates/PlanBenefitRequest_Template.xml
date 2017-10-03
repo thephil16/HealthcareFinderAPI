@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<p:PlanBenefitRequest xmlns:p="http://hios.cms.org/api" xmlns:p1="http://hios.cms.org/api-types" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://hios.cms.org/api hios-api-11.0.xsd ">
+</p:PlanBenefitRequest>

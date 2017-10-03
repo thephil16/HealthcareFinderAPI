@@ -32,3 +32,8 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 .Rproj.user
+
+# Other Referencing Scripts
+GatherHealthcareData.r
+ZipCountyList.csv
+Output/
