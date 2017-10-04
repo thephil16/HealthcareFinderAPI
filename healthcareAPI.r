@@ -860,21 +860,6 @@ processAPIResponse.PlanDetailsResponse <- function(xmlResponse){
   }
   
   output <- nodeProcessor(childNodes)
-  
-  # for(i in benefitList){
-  #   childNodes <- xml_children(i)
-  #   varNames <- xml_name(childNodes)
-  #   varValues <- xml_text(childNodes)
-  #   names(varValues) <- varNames
-  #   tempDT <- setDT(as.list(varValues))
-  #   if(is.null(finalDT)){
-  #     finalDT <- tempDT
-  #   } else {
-  #     finalDT <- funion(finalDT, tempDT, all = TRUE)
-  #   }
-  # }
-  # 
-  # return(finalDT)
 }
 
 # Male, 30 years old, non-smoker
